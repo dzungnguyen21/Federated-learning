@@ -71,7 +71,14 @@ def start_server():
     # Check if server is already running
     if is_port_in_use(port):
         print(f"ERROR: Server already running on port {port}")
-        print("Terminate the existing server process before starting a new one")
+        print("Please check if:")
+        print("1. Another instance of the server is running")
+        print("2. Another application is using port 8080")
+        print("3. The previous server process didn't shut down properly")
+        print("\nTo fix this:")
+        print("1. Close any running server instances")
+        print("2. Use 'netstat -ano | findstr :8080' to find processes using port 8080")
+        print("3. Use 'taskkill /PID <PID> /F' to kill the process")
         sys.exit(1)
     
     # Create server directory for logs and models
@@ -95,6 +102,8 @@ def start_server():
     # Start server
     server_address = "0.0.0.0:8080"  # Accessible from external network
     print(f"Starting Flower server on {server_address}")
+    print("Waiting for clients to connect...")
+    print("Make sure to run clients with: python client.py --client_id <1-4> --server_address localhost:8080")
     fl.server.start_server(
         server_address=server_address,
         config=fl.server.ServerConfig(num_rounds=10),
