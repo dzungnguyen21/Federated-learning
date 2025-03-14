@@ -7,77 +7,20 @@ import argparse
 import os
 import time
 import sys
-from tensorflow.keras.callbacks import Callback
+
+# Import từ các module khác
+from model import create_model, get_client_data, TrainingCallback
+from config import CLIENT_CONFIG
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Flower client")
 parser.add_argument("--client_id", type=int, choices=[1, 2, 3, 4], required=True, 
                     help="Client ID (1-4)")
-parser.add_argument("--server_address", type=str, required=True, 
-                    help="Server address (IP:port)")
-parser.add_argument("--retries", type=int, default=5,
+parser.add_argument("--server_address", type=str, default=None,
+                    help="Server address (IP:port). If not provided, will read from server_port.txt")
+parser.add_argument("--retries", type=int, default=CLIENT_CONFIG["max_retries"],
                     help="Number of connection retries")
 args = parser.parse_args()
-
-# Custom callback for logging training progress
-class TrainingCallback(Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        print(f"Epoch {epoch+1} completed. Loss: {logs['loss']:.4f}, "
-              f"Accuracy: {logs['sparse_categorical_accuracy']:.4f}")
-
-# Load MNIST data partition for this client
-def load_partition(client_id):
-    print(f"Loading data partition for client {client_id}...")
-    
-    # Load full MNIST dataset
-    try:
-        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
-    except Exception as e:
-        print(f"Error loading MNIST data: {e}")
-        print("Attempting to download data explicitly...")
-        # Windows may have issues with the default cache location
-        os.environ['KERAS_HOME'] = os.path.join(os.getcwd(), '.keras')
-        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
-    
-    # Normalize data
-    x_train, x_test = x_train / 255.0, x_test / 255.0
-    
-    # Reshape
-    x_train = x_train.reshape(-1, 28, 28, 1)
-    x_test = x_test.reshape(-1, 28, 28, 1)
-    
-    # Determine indices for this client
-    n_clients = 4
-    samples_per_client = len(x_train) // n_clients
-    
-    start_idx = (client_id - 1) * samples_per_client
-    end_idx = client_id * samples_per_client if client_id < n_clients else len(x_train)
-    
-    client_x = x_train[start_idx:end_idx]
-    client_y = y_train[start_idx:end_idx]
-    
-    print(f"Client {client_id} loaded {len(client_x)} training samples")
-    return (client_x, client_y), (x_test, y_test)
-
-# Define model
-def create_model():
-    print("Creating and compiling model...")
-    model = tf.keras.models.Sequential([
-        tf.keras.layers.Conv2D(32, kernel_size=(3, 3), activation="relu", input_shape=(28, 28, 1)),
-        tf.keras.layers.MaxPooling2D(pool_size=(2, 2)),
-        tf.keras.layers.Conv2D(64, kernel_size=(3, 3), activation="relu"),
-        tf.keras.layers.MaxPooling2D(pool_size=(2, 2)),
-        tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(128, activation="relu"),
-        tf.keras.layers.Dropout(0.2),
-        tf.keras.layers.Dense(10, activation="softmax"),
-    ])
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-        loss=tf.keras.losses.SparseCategoricalCrossentropy(),
-        metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
-    )
-    return model
 
 # Define Flower client
 class MnistClient(fl.client.NumPyClient):
@@ -88,7 +31,7 @@ class MnistClient(fl.client.NumPyClient):
         self.client_id = client_id
         
         # Create client directory for saving models
-        self.save_dir = f"client_{client_id}_models"
+        self.save_dir = f"{CLIENT_CONFIG['client_data_dir_prefix']}{client_id}{CLIENT_CONFIG['client_data_dir_suffix']}"
         os.makedirs(self.save_dir, exist_ok=True)
         
         print(f"Client {client_id} initialized and ready")
@@ -108,14 +51,14 @@ class MnistClient(fl.client.NumPyClient):
         print(f"Client {self.client_id}: Training round {round_num}")
         
         # Train the model
-        batch_size = 32
-        epochs = 1  # Just one epoch per round
+        batch_size = CLIENT_CONFIG["batch_size"]
+        epochs = CLIENT_CONFIG["epochs_per_round"]
         
         history = self.model.fit(
             self.x_train, self.y_train,
             batch_size=batch_size,
             epochs=epochs,
-            validation_split=0.1,
+            validation_split=CLIENT_CONFIG["validation_split"],
             verbose=1,
             callbacks=[TrainingCallback()]
         )
@@ -150,12 +93,25 @@ class MnistClient(fl.client.NumPyClient):
 def main():
     client_id = args.client_id
     server_address = args.server_address
+    
+    # If server_address is not provided, try to read from file
+    if server_address is None:
+        try:
+            with open("server_port.txt", "r") as f:
+                port = f.read().strip()
+            server_address = f"localhost:{port}"
+        except Exception as e:
+            print("ERROR: Could not read server port from server_port.txt")
+            print("Please make sure the server is running and server_port.txt exists")
+            print("Or provide the server address manually using --server_address")
+            sys.exit(1)
+    
     max_retries = args.retries
     
     print(f"Starting client {client_id}, connecting to {server_address}")
     
     # Load data partition for this client
-    (x_train, y_train), (x_test, y_test) = load_partition(client_id)
+    (x_train, y_train), (x_test, y_test) = get_client_data(client_id)
     
     # Create and compile model
     model = create_model()
