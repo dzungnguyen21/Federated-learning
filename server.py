@@ -1,8 +1,9 @@
 import flwr as fl
 import tensorflow as tf
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Optional
 import numpy as np
-from flwr.common import Metrics
+from flwr.common import Metrics, Parameters
+from flwr.server.client_proxy import ClientProxy
 import os
 import socket
 import sys
@@ -12,7 +13,32 @@ def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
 
-# Define the model architecture
+# Define the aggregation strategy
+class SaveModelStrategy(fl.server.strategy.FedAvg):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_round = 0
+    
+    def aggregate_fit(self, server_round, results, failures):
+        # Call the parent's aggregate_fit
+        aggregated_parameters, aggregated_metrics = super().aggregate_fit(server_round, results, failures)
+        
+        # Save the global model
+        if aggregated_parameters is not None:
+            print(f"Saving global model for round {server_round}")
+            os.makedirs("server_data", exist_ok=True)
+            np.savez(f"server_data/global_model_round_{server_round}.npz", 
+                     *[param.numpy() for param in aggregated_parameters])
+        
+        self.current_round = server_round
+        return aggregated_parameters, aggregated_metrics
+    
+    def aggregate_evaluate(self, server_round, results, failures):
+        aggregated_metrics = super().aggregate_evaluate(server_round, results, failures)
+        print(f"Round {server_round} evaluation metrics: {aggregated_metrics}")
+        return aggregated_metrics
+
+# Load and compile the model to get the model structure
 def get_model():
     model = tf.keras.models.Sequential([
         tf.keras.layers.Conv2D(32, kernel_size=(3, 3), activation="relu", input_shape=(28, 28, 1)),
@@ -31,33 +57,14 @@ def get_model():
     )
     return model
 
-# Define strategy with initial parameters
-def get_strategy():
-    # Initialize model
-    model = get_model()
-    
-    # Get initial parameters as numpy arrays
-    initial_parameters = [np.array(param) for param in model.get_weights()]
-    
-    # Define metric aggregation function
-    def weighted_average(metrics: List[Tuple[int, Metrics]]) -> Metrics:
-        accuracies = [num_examples * m["sparse_categorical_accuracy"] for num_examples, m in metrics]
-        examples = [num_examples for num_examples, _ in metrics]
-        return {"sparse_categorical_accuracy": sum(accuracies) / sum(examples)}
-    
-    # Create strategy with initial parameters
-    return fl.server.strategy.FedAvg(
-        fraction_fit=1.0,
-        fraction_evaluate=1.0,
-        min_fit_clients=4,
-        min_evaluate_clients=4,
-        min_available_clients=4,
-        evaluate_metrics_aggregation_fn=weighted_average,
-        initial_parameters=fl.common.ndarrays_to_parameters(initial_parameters),
-    )
+def weighted_average(metrics: List[Tuple[int, Metrics]]) -> Metrics:
+    # Calculate weighted average of metrics
+    accuracies = [num_examples * m["sparse_categorical_accuracy"] for num_examples, m in metrics]
+    examples = [num_examples for num_examples, _ in metrics]
+    return {"sparse_categorical_accuracy": sum(accuracies) / sum(examples)}
 
-# Main function to start server
-def main():
+# Start the server
+def start_server():
     # Server port
     port = 8080
     
@@ -70,12 +77,23 @@ def main():
     # Create server directory for logs and models
     os.makedirs("server_data", exist_ok=True)
     
-    # Get strategy with initial parameters
-    strategy = get_strategy()
+    # Initialize model and get initial parameters
+    model = get_model()
+    initial_parameters = [np.array(param) for param in model.get_weights()]
     
-    # Start server with proper config
-    server_address = "0.0.0.0:8080"  # Listen on all interfaces
+    # Define strategy
+    strategy = SaveModelStrategy(
+        fraction_fit=1.0,  # Use all available clients for training
+        fraction_evaluate=1.0,  # Use all available clients for evaluation
+        min_fit_clients=4,  # Wait until 4 clients are available
+        min_evaluate_clients=4,  # Wait until 4 clients are available
+        min_available_clients=4,  # Wait until 4 clients are available
+        evaluate_metrics_aggregation_fn=weighted_average,
+        initial_parameters=fl.common.ndarrays_to_parameters(initial_parameters),
+    )
     
+    # Start server
+    server_address = "0.0.0.0:8080"  # Accessible from external network
     print(f"Starting Flower server on {server_address}")
     fl.server.start_server(
         server_address=server_address,
@@ -84,4 +102,4 @@ def main():
     )
 
 if __name__ == "__main__":
-    main()
+    start_server()
