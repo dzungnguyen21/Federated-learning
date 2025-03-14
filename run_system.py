@@ -3,6 +3,7 @@ import sys
 import time
 import os
 import signal
+from config import NUM_CLIENTS
 
 def run_server():
     """
@@ -33,8 +34,8 @@ def run_client(client_id):
         return subprocess.Popen(terminal_cmd)
 
 def main():
-    # Số lượng clients muốn chạy
-    num_clients = 2
+    # Số lượng clients muốn chạy (lấy từ config)
+    num_clients = NUM_CLIENTS
     
     # Chạy server
     print("Khởi động server...")

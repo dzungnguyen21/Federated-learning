@@ -1,12 +1,15 @@
 # Cấu hình cho Federated Learning
 
+# Số lượng clients trong hệ thống
+NUM_CLIENTS = 2  # Tổng số clients trong hệ thống
+
 # Cấu hình server
 SERVER_CONFIG = {
     "min_port": 8080,                # Port bắt đầu để tìm port trống
     "max_port": 8090,                # Port kết thúc để tìm port trống
     "host": "0.0.0.0",               # Host address (0.0.0.0 để lắng nghe tất cả interfaces)
     "num_rounds": 5,                 # Số rounds training (giảm xuống để test nhanh hơn)
-    "min_clients": 2,                # Số lượng clients tối thiểu cần thiết (giảm xuống để dễ test)
+    "min_clients": 1,                # Số lượng clients tối thiểu cần thiết (giảm xuống để dễ test)
     "fraction_fit": 1.0,             # Tỉ lệ clients tham gia training
     "fraction_evaluate": 1.0,        # Tỉ lệ clients tham gia evaluation
     "server_data_dir": "server_data" # Thư mục lưu dữ liệu server
@@ -33,6 +36,6 @@ MODEL_CONFIG = {
 
 # Cấu hình dữ liệu
 DATA_CONFIG = {
-    "num_clients": 4,                # Tổng số clients
+    "num_clients": NUM_CLIENTS,      # Tổng số clients
     "keras_home": ".keras"           # Thư mục cache cho Keras
 } 

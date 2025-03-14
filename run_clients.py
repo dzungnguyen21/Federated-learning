@@ -2,6 +2,7 @@ import subprocess
 import sys
 import time
 import os
+from config import NUM_CLIENTS
 
 def run_client(client_id, server_address=None):
     """
@@ -31,8 +32,8 @@ def main():
         server_address = None
         print("Không tìm thấy server_port.txt. Clients sẽ tự động tìm server.")
     
-    # Số lượng clients muốn chạy
-    num_clients = 2
+    # Số lượng clients muốn chạy (lấy từ config)
+    num_clients = NUM_CLIENTS
     
     # Chạy các clients
     processes = []
