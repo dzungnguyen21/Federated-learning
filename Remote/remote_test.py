@@ -81,7 +81,7 @@ def status():
     """
     Get current server status
     """
-    global global_round, max_rounds, round_completion
+    global global_round, max_rounds, round_completion, clients_this_round
     
     if global_server is None:
         return jsonify({
@@ -89,12 +89,18 @@ def status():
             'message': 'Server not initialized yet'
         })
     
+    # Get configuration for client count
+    config_loader = Path()
+    config = config_loader.config
+    clients_per_round = max(1, int(config['server']['fraction_clients'] * config['data']['num_clients']))
+    
     return jsonify({
         'status': 'Running',
         'current_round': global_round,
         'max_rounds': max_rounds,
         'round_completed': round_completion,
-        'clients_this_round': len(clients_this_round)
+        'clients_this_round': len(clients_this_round),
+        'clients_needed': clients_per_round
     })
 
 @app.route('/get_model', methods=['GET'])
@@ -107,13 +113,15 @@ def get_model_params():
     if global_server is None:
         return jsonify({
             'status': 'error',
-            'message': 'Server not initialized'
+            'message': 'Server not initialized',
+            'round': -1
         }), 500
     
     if global_round >= max_rounds:
         return jsonify({
             'status': 'completed',
-            'message': 'Training completed'
+            'message': 'Training completed',
+            'round': global_round
         })
     
     # Get model parameters
@@ -138,13 +146,15 @@ def submit_update():
     if global_server is None:
         return jsonify({
             'status': 'error',
-            'message': 'Server not initialized'
+            'message': 'Server not initialized',
+            'round': -1
         }), 500
     
     if global_round >= max_rounds:
         return jsonify({
             'status': 'completed',
-            'message': 'Training completed'
+            'message': 'Training completed',
+            'round': global_round
         })
     
     # Get data from request
@@ -156,7 +166,8 @@ def submit_update():
     if client_round != global_round:
         return jsonify({
             'status': 'error',
-            'message': f'Client round {client_round} does not match server round {global_round}'
+            'message': f'Client round {client_round} does not match server round {global_round}',
+            'round': global_round
         }), 400
     
     # Convert base64 strings back to tensors
@@ -191,8 +202,8 @@ def submit_update():
                 'round_completed': True,
                 'new_round': global_round,
                 'metrics': {
-                    'loss': test_loss,
-                    'accuracy': accuracy
+                    'loss': float(test_loss),
+                    'accuracy': float(accuracy)
                 }
             })
         else:
@@ -201,13 +212,15 @@ def submit_update():
                 'message': 'Update received',
                 'round_completed': False,
                 'clients_received': len(clients_this_round),
-                'clients_needed': clients_per_round
+                'clients_needed': clients_per_round,
+                'round': global_round
             })
             
     except Exception as e:
         return jsonify({
             'status': 'error',
-            'message': f'Error processing update: {str(e)}'
+            'message': f'Error processing update: {str(e)}',
+            'round': global_round
         }), 500
 
 @app.route('/reset', methods=['POST'])
@@ -225,7 +238,8 @@ def reset():
         
         return jsonify({
             'status': 'success',
-            'message': 'Server reset successfully'
+            'message': 'Server reset successfully',
+            'round': global_round
         })
     except Exception as e:
         return jsonify({
@@ -238,7 +252,7 @@ def get_metrics():
     """
     Get current model metrics
     """
-    global global_server
+    global global_server, global_round
     
     if global_server is None:
         return jsonify({
@@ -252,9 +266,10 @@ def get_metrics():
         
         return jsonify({
             'status': 'success',
+            'round': global_round,
             'metrics': {
-                'loss': test_loss,
-                'accuracy': accuracy
+                'loss': float(test_loss),
+                'accuracy': float(accuracy)
             }
         })
     except Exception as e:
