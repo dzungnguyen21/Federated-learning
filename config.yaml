@@ -2,14 +2,14 @@
 
 # Data Configuration
 data:
-  dataset: 'cifar10'  # Options: 'mnist', 'cifar10'
+  dataset: 'mnist'  # Options: 'mnist', 'cifar10'
   num_clients: 5
   samples_per_client: 8000
   iid: True    # Set to True for IID data, False for non-IID data
 
 # Model Configuration
 model:
-  name: 'cifar_cnn'  # Options: 'cnn [1,28,28]', 'cifar_cnn[3,32,32]'
+  name: 'cnn'  # Options: 'cnn [1,28,28]', 'cifar_cnn[3,32,32]'
   input_shape: [3, 32, 32]  # [channels, height, width]
   num_classes: 10
 
