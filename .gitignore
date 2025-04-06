@@ -31,9 +31,11 @@ ENV/
 *.swp
 *.swo
 
-#data
+# Data
+Data/
 Data/cifar-10-python.tar.gz
-
+*.tar.gz
+*.gz
 
 # Project specific
 server_data/
@@ -43,4 +45,4 @@ client_*_models/
 *.npz
 
 # Logs
-*.log 
+*.log
