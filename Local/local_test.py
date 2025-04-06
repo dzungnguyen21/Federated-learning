@@ -1,6 +1,5 @@
 import sys
 import os
-import yaml
 import torch
 from torch.utils.data import DataLoader
 import argparse
@@ -9,13 +8,10 @@ import argparse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.data_loader import load_dataset
 from Data.data_split import create_client_data
-from Components.client import Client
-from Components.global_model import Server
+from Client.client import Client
+from Server.global_model import Server
 from Components.visualize_training import TrainingVisualizer
-
-def load_config():
-    with open('d:/AI/S2_Y3/Du_an/FL_1/config.yaml', 'r') as file:
-        return yaml.safe_load(file)
+from Components.load_config import Path
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Federated Learning Training')
@@ -27,8 +23,9 @@ def main():
     # Parse command-line arguments
     args = parse_arguments()
     
-    # Load configuration
-    config = load_config()
+    # Load configuration using Path class
+    config_loader = Path()
+    config = config_loader.config
     
     # Set random seeds for reproducibility
     torch.manual_seed(42)

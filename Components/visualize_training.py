@@ -4,15 +4,15 @@ import sys
 import os
 import torch
 from torch.utils.data import DataLoader
-import yaml
 
 # Add root directory to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.data_loader import load_mnist_data
 from Data.data_split import create_client_data
-from Components.client import Client
-from Components.global_model import Server
+from Client.client import Client
+from Server.global_model import Server
 from Components.model import get_model
+from Components.load_config import Path
 
 class TrainingVisualizer:
     def __init__(self):
@@ -101,9 +101,9 @@ class TrainingVisualizer:
         """
         Visualize model performance on test dataset
         """
-        # Load config to determine dataset
-        with open('d:/AI/S2_Y3/Du_an/FL_1/config.yaml', 'r') as file:
-            config = yaml.safe_load(file)
+        # Load config using Path class
+        config_loader = Path()
+        config = config_loader.config
         
         dataset = config['data']['dataset'].lower()
         
@@ -165,9 +165,9 @@ class TrainingVisualizer:
         """
         plt.figure(figsize=(15, 7))
         
-        # Load configuration and dataset
-        from Data.data_split import load_config
-        config = load_config()
+        # Load configuration using Path class
+        config_loader = Path()
+        config = config_loader.config
         
         # Set random seed for reproducibility
         torch.manual_seed(42)
@@ -210,9 +210,9 @@ def run_federated_learning(iid, test_loader, train_dataset, num_rounds=5):
     """
     Run federated learning for comparison purposes
     """
-    # Load configuration
-    from Data.data_split import load_config
-    config = load_config()
+    # Load configuration using Path class
+    config_loader = Path()
+    config = config_loader.config
     
     # Split training data among clients
     num_clients = config['data']['num_clients']

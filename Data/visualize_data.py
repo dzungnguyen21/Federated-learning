@@ -3,13 +3,13 @@ import numpy as np
 import torch
 import sys
 import os
-import yaml
 from collections import Counter
 
 # Add root directory to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.data_loader import load_dataset
-from Data.data_split import create_client_data, load_config
+from Data.data_split import create_client_data
+from Components.load_config import Path
 
 def get_client_label_distribution(client_loaders):
     """
@@ -59,9 +59,9 @@ def plot_sample_images(dataset, num_samples=10):
     """
     Plot sample images from the dataset
     """
-    # Load config to determine dataset
-    with open('d:/AI/S2_Y3/Du_an/FL_1/config.yaml', 'r') as file:
-        config = yaml.safe_load(file)
+    # Load config using Path class
+    config_loader = Path()
+    config = config_loader.config
     
     dataset_name = config['data']['dataset'].lower()
     
@@ -114,8 +114,9 @@ def visualize_data():
     """
     Main function to visualize data
     """
-    # Load configuration
-    config = load_config()
+    # Load configuration using Path class
+    config_loader = Path()
+    config = config_loader.config
     
     # Set random seed for reproducibility
     np.random.seed(42)

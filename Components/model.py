@@ -1,12 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import yaml
-import os
-
-def load_config():
-    with open('d:/AI/S2_Y3/Du_an/FL_1/config.yaml', 'r') as file:
-        return yaml.safe_load(file)
+from Components.load_config import Path
 
 class MnistCNN(nn.Module):
     def __init__(self):
@@ -73,7 +68,9 @@ def get_model():
     """
     Get the model based on configuration
     """
-    config = load_config()
+    config_loader = Path()
+    config = config_loader.config
+    
     model_name = config['model']['name']
     dataset = config['data']['dataset']
     

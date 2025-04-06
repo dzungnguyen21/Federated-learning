@@ -1,18 +1,21 @@
 import numpy as np
 import torch
 from torch.utils.data import Subset, DataLoader
-import yaml
 import os
+import sys
 
-def load_config():
-    with open('d:/AI/S2_Y3/Du_an/FL_1/config.yaml', 'r') as file:
-        return yaml.safe_load(file)
+# Add root directory to path for imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from Components.load_config import Path
 
 def iid_split(dataset, num_clients):
     """
     Split dataset in IID fashion among clients
     """
-    config = load_config()
+    # Use Path class to load config
+    config_loader = Path()
+    config = config_loader.config
+    
     samples_per_client = config['data']['samples_per_client']
     num_samples = len(dataset)
     print(f"Total samples: {num_samples}")
@@ -35,7 +38,10 @@ def non_iid_split(dataset, num_clients, num_shards=200):
     Split dataset in non-IID fashion among clients
     Each client gets data from specific classes (label-based non-IID)
     """
-    config = load_config()
+    # Use Path class to load config
+    config_loader = Path()
+    config = config_loader.config
+    
     samples_per_client = config['data']['samples_per_client']
     num_classes = config['model']['num_classes']
     
@@ -85,7 +91,10 @@ def create_client_data(dataset, num_clients, iid=False):
     """
     Create data loaders for each client
     """
-    config = load_config()
+    # Use Path class to load config
+    config_loader = Path()
+    config = config_loader.config
+    
     batch_size = config['training']['batch_size']
     
     if iid:

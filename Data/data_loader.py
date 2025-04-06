@@ -1,12 +1,12 @@
 import torch
 from torchvision import datasets, transforms
 import numpy as np
-import yaml
+import sys
 import os
 
-def load_config():
-    with open('d:/AI/S2_Y3/Du_an/FL_1/config.yaml', 'r') as file:
-        return yaml.safe_load(file)
+# Add root directory to path for imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from Components.load_config import Path
 
 def load_mnist_data():
     """
@@ -75,12 +75,17 @@ def load_dataset():
     """
     Load dataset based on configuration
     """
-    config = load_config()
+    # Use Path class to load config
+    config_loader = Path()
+    config = config_loader.config
+    
     dataset_name = config['data']['dataset'].lower()
     
     if dataset_name == 'mnist':
+        # print("Loading MNIST dataset")
         return load_mnist_data()
     elif dataset_name == 'cifar10':
+        # print("Loading CIFAR-10 dataset")
         return load_cifar10_data()
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
