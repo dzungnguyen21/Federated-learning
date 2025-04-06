@@ -39,17 +39,4 @@ client_*_models/
 *.npz
 
 # Logs
-*.log
-
-# Dataset directories - exclude from Git
-data/
-Data/cifar-10-python.tar.gz
-Data/cifar-10-batches-py/
-Data/MNIST/
-Data/processed/
-
-# PyTorch dataset files
-*.tar.gz
-*.gz
-*.pt
-*.pkl
+*.log 
