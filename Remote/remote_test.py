@@ -3,7 +3,7 @@ import os
 import torch
 import numpy as np
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from io import BytesIO
 import base64
 
@@ -23,6 +23,14 @@ global_round = 0
 max_rounds = 0
 clients_this_round = {}
 round_completion = False
+
+@app.route('/favicon.ico')
+def favicon():
+    """
+    Return a default favicon to prevent 404 errors
+    """
+    # Return an empty response with 204 No Content status
+    return '', 204
 
 def init_server():
     """

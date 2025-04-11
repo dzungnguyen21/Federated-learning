@@ -10,6 +10,10 @@ from collections import Counter
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.data_loader import load_dataset
 from Data.data_split import create_client_data, load_config
+from Components.load_config import Path
+
+config_loader = Path()
+config = config_loader.config
 
 def get_client_label_distribution(client_loaders):
     """
@@ -60,8 +64,8 @@ def plot_sample_images(dataset, num_samples=10):
     Plot sample images from the dataset
     """
     # Load config to determine dataset
-    with open('d:/AI/S2_Y3/Du_an/FL_1/config.yaml', 'r') as file:
-        config = yaml.safe_load(file)
+    # with open('d:/AI/S2_Y3/Du_an/FL_1/config.yaml', 'r') as file:
+    #     config = yaml.safe_load(file)
     
     dataset_name = config['data']['dataset'].lower()
     
