@@ -66,18 +66,18 @@ python SetupFL/Local/local_test.py --visualize
 
 1. Start the server:
    ```
-   python SetupFL/Remote/remote_test.py
+   python Remote/remote_test.py
    ```
 
 2. Start multiple clients (in separate terminals):
    ```
-   python SetupFL/Remote/remote_client.py --client_id 0 --server_url http://localhost:5000
-   python SetupFL/Remote/remote_client.py --client_id 1 --server_url http://localhost:5000
+   python Remote/remote_client.py --client_id 0 --server_url http://localhost:5000
+   python Remote/remote_client.py --client_id 1 --server_url http://localhost:5000
    ```
 
 3. Launch the dashboard:
    ```
-   python SetupFL/Remote/dashboard.py --server_url http://localhost:5000
+   python Remote/dashboard.py --server_url http://localhost:5000
    ```
    Access the dashboard at http://localhost:8080
 
@@ -91,7 +91,7 @@ To make your federated learning server accessible over the internet (for truly d
 
 3. Start your federated learning server:
    ```
-   python SetupFL/Remote/remote_test.py
+   python Remote/remote_test.py
    ```
 
 4. In a separate terminal, start ngrok:
@@ -101,12 +101,12 @@ To make your federated learning server accessible over the internet (for truly d
 
 5. Ngrok will display a forwarding URL (e.g., `https://abc123.ngrok-free.app`). Use this URL for your remote clients:
    ```
-   python Remote/remote_client.py --client_id 0 --server_url "https://5af4-42-113-61-75.ngrok-free.app"
+   python Remote/remote_client.py --client_id 0 --server_url "....."
    ```
 
 6. For the dashboard, also use the ngrok URL:
    ```
-   python Remote/dashboard.py --server_url "https://5af4-42-113-61-75.ngrok-free.app"
+   python Remote/dashboard.py --server_url "....."
    ```
 
 Note: The ngrok URL will change each time you restart ngrok unless you have a paid account with a fixed subdomain.

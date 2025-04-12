@@ -1,66 +1,21 @@
 import sys
 import os
 import torch
-import numpy as np
+import requests
 import json
-from flask import Flask, request, jsonify, send_from_directory
+import argparse
+import time
 from io import BytesIO
 import base64
 
 # Add root directory to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from Client.client import Client
 from Data.data_loader import load_dataset
-from Server.global_model import Server
+from Data.data_split import create_client_data
 from Components.model import get_model, get_model_parameters, set_model_parameters
 from Components.load_config import Path
 from torch.utils.data import DataLoader
-
-app = Flask(__name__)
-
-# Global variables
-global_server = None
-global_round = 0
-max_rounds = 0
-clients_this_round = {}
-round_completion = False
-
-@app.route('/favicon.ico')
-def favicon():
-    """
-    Return a default favicon to prevent 404 errors
-    """
-    # Return an empty response with 204 No Content status
-    return '', 204
-
-def init_server():
-    """
-    Initialize the federated learning server
-    """
-    global global_server, max_rounds
-    
-    # Load configuration
-    config_loader = Path()
-    config = config_loader.config
-    max_rounds = config['training']['global_rounds']
-    
-    # Set random seed for reproducibility
-    torch.manual_seed(42)
-    
-    # Load dataset
-    _, test_dataset = load_dataset()
-    
-    # Create test data loader
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=config['training']['batch_size'],
-        shuffle=False
-    )
-    
-    # Initialize server
-    global_server = Server(test_loader)
-    
-    print(f"Server initialized with {config['data']['dataset']} dataset and {config['model']['name']} model")
-    print(f"Server will run for {max_rounds} rounds")
 
 def tensor_to_base64(tensor):
     """
@@ -77,218 +32,211 @@ def base64_to_tensor(b64_string):
     buffer = BytesIO(base64.b64decode(b64_string))
     return torch.load(buffer, map_location=torch.device('cpu'))
 
-@app.route('/')
-def index():
-    """
-    Root endpoint for the server
-    """
-    return "Federated Learning Server - Running"
-
-@app.route('/status', methods=['GET'])
-def status():
-    """
-    Get current server status
-    """
-    global global_round, max_rounds, round_completion, clients_this_round
-    
-    if global_server is None:
-        return jsonify({
-            'status': 'Not initialized',
-            'message': 'Server not initialized yet'
-        })
-    
-    # Get configuration for client count
-    config_loader = Path()
-    config = config_loader.config
-    clients_per_round = max(1, int(config['server']['fraction_clients'] * config['data']['num_clients']))
-    
-    return jsonify({
-        'status': 'Running',
-        'current_round': global_round,
-        'max_rounds': max_rounds,
-        'round_completed': round_completion,
-        'clients_this_round': len(clients_this_round),
-        'clients_needed': clients_per_round
-    })
-
-@app.route('/get_model', methods=['GET'])
-def get_model_params():
-    """
-    Provide the current global model to clients
-    """
-    global global_server, global_round, max_rounds
-    
-    if global_server is None:
-        return jsonify({
-            'status': 'error',
-            'message': 'Server not initialized',
-            'round': -1
-        }), 500
-    
-    if global_round >= max_rounds:
-        return jsonify({
-            'status': 'completed',
-            'message': 'Training completed',
-            'round': global_round
-        })
-    
-    # Get model parameters
-    parameters = global_server.get_global_parameters()
-    
-    # Convert tensors to base64 strings
-    param_data = [tensor_to_base64(param) for param in parameters]
-    
-    return jsonify({
-        'status': 'success',
-        'round': global_round,
-        'model_params': param_data
-    })
-
-@app.route('/submit_update', methods=['POST'])
-def submit_update():
-    """
-    Submit updated model parameters from client
-    """
-    global global_server, global_round, clients_this_round, round_completion
-    
-    if global_server is None:
-        return jsonify({
-            'status': 'error',
-            'message': 'Server not initialized',
-            'round': -1
-        }), 500
-    
-    if global_round >= max_rounds:
-        return jsonify({
-            'status': 'completed',
-            'message': 'Training completed',
-            'round': global_round
-        })
-    
-    # Get data from request
-    data = request.json
-    client_id = data.get('client_id')
-    client_round = data.get('round')
-    
-    # Verify round number
-    if client_round != global_round:
-        return jsonify({
-            'status': 'error',
-            'message': f'Client round {client_round} does not match server round {global_round}',
-            'round': global_round
-        }), 400
-    
-    # Convert base64 strings back to tensors
-    try:
-        model_params = [base64_to_tensor(param) for param in data.get('model_params')]
+class RemoteClient:
+    def __init__(self, client_id, server_url):
+        """
+        Initialize remote client
+        """
+        self.client_id = client_id
+        self.server_url = server_url
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Store client update
-        clients_this_round[client_id] = model_params
-        
-        # Check server configuration for number of clients per round
+        # Load configuration using Path class
         config_loader = Path()
-        config = config_loader.config
-        clients_per_round = max(1, int(config['server']['fraction_clients'] * config['data']['num_clients']))
+        self.config = config_loader.config
         
-        # If we have enough clients, aggregate and move to the next round
-        if len(clients_this_round) >= clients_per_round:
-            # Aggregate parameters
-            global_server.aggregate_parameters(list(clients_this_round.values()))
-            
-            # Evaluate global model
-            test_loss, accuracy = global_server.evaluate()
-            print(f"Round {global_round + 1}: Loss: {test_loss:.4f}, Accuracy: {accuracy:.2f}%")
-            
-            # Move to the next round
-            global_round += 1
-            clients_this_round.clear()
-            round_completion = True
-            
-            return jsonify({
-                'status': 'success',
-                'message': 'Update received and round completed',
-                'round_completed': True,
-                'new_round': global_round,
-                'metrics': {
-                    'loss': float(test_loss),
-                    'accuracy': float(accuracy)
-                }
-            })
+        # Load dataset
+        train_dataset, _ = load_dataset()
+        
+        # Split data among clients
+        num_clients = self.config['data']['num_clients']
+        iid = self.config['data']['iid']
+        client_loaders = create_client_data(train_dataset, num_clients, iid)
+        
+        # Initialize client with its data
+        if self.client_id in client_loaders:
+            self.client = Client(self.client_id, client_loaders[self.client_id])
         else:
-            return jsonify({
-                'status': 'success',
-                'message': 'Update received',
-                'round_completed': False,
-                'clients_received': len(clients_this_round),
-                'clients_needed': clients_per_round,
-                'round': global_round
-            })
+            raise ValueError(f"Client ID {self.client_id} not found in dataset splits")
+    
+    def get_server_status(self):
+        """
+        Get current server status
+        """
+        try:
+            response = requests.get(f"{self.server_url}/status")
+            return response.json()
+        except Exception as e:
+            print(f"Error getting server status: {str(e)}")
+            return None
+    
+    def get_global_model(self, current_round):
+        """
+        Get current global model from server
+        """
+        try:
+            response = requests.get(f"{self.server_url}/get_model")
+            data = response.json()
             
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Error processing update: {str(e)}',
-            'round': global_round
-        }), 500
-
-@app.route('/reset', methods=['POST'])
-def reset():
-    """
-    Reset the server to start training from the beginning
-    """
-    global global_server, global_round, clients_this_round, round_completion
+            if data['status'] == 'success':
+                # Convert base64 strings back to tensors
+                model_params = [base64_to_tensor(param) for param in data['model_params']]
+                return model_params, data['round']
+            elif data['status'] == 'completed':
+                print("Training completed on server")
+                return None, -1
+            else:
+                print(f"Error getting global model: {data.get('message', 'Unknown error')}")
+                return None, data.get('round', -1)
+                
+        except Exception as e:
+            print(f"Error getting global model: {str(e)}")
+            return None, -1
     
-    try:
-        init_server()
-        global_round = 0
-        clients_this_round = {}
-        round_completion = False
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Server reset successfully',
-            'round': global_round
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Error resetting server: {str(e)}'
-        }), 500
-
-@app.route('/metrics', methods=['GET'])
-def get_metrics():
-    """
-    Get current model metrics
-    """
-    global global_server, global_round
-    
-    if global_server is None:
-        return jsonify({
-            'status': 'error',
-            'message': 'Server not initialized'
-        }), 500
-    
-    try:
-        # Evaluate global model
-        test_loss, accuracy = global_server.evaluate()
-        
-        return jsonify({
-            'status': 'success',
-            'round': global_round,
-            'metrics': {
-                'loss': float(test_loss),
-                'accuracy': float(accuracy)
+    def submit_update(self, model_params, current_round):
+        """
+        Submit updated model parameters to server
+        """
+        try:
+            # Convert tensors to base64 strings
+            param_data = [tensor_to_base64(param) for param in model_params]
+            
+            # Prepare payload
+            payload = {
+                'client_id': self.client_id,
+                'round': current_round,
+                'model_params': param_data
             }
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Error getting metrics: {str(e)}'
-        }), 500
+            
+            # Send update to server
+            response = requests.post(
+                f"{self.server_url}/submit_update",
+                json=payload
+            )
+            
+            return response.json()
+        except Exception as e:
+            print(f"Error submitting update: {str(e)}")
+            return None
+    
+    def train(self, max_rounds=None):
+        """
+        Perform federated learning with the server
+        """
+        if max_rounds is None:
+            max_rounds = self.config['training']['global_rounds']
+        
+        current_round = 0
+        
+        while current_round < max_rounds:
+            # Check server status
+            status = self.get_server_status()
+            if status is None:
+                print("Could not connect to server. Retrying in 5 seconds...")
+                time.sleep(5)
+                continue
+            
+            # Check if we're in sync with the server
+            server_round = status.get('current_round', 0)
+            if server_round != current_round:
+                print(f"Client round ({current_round}) out of sync with server round ({server_round})")
+                current_round = server_round
+                
+                if current_round >= max_rounds:
+                    print("Training completed")
+                    break
+            
+            # Get current global model
+            global_params, model_round = self.get_global_model(current_round)
+            
+            if global_params is None:
+                if model_round == -1:
+                    # Training completed
+                    break
+                
+                # Round mismatch - synchronize with server round
+                if model_round >= 0 and model_round != current_round:
+                    print(f"Synchronizing client round from {current_round} to {model_round}")
+                    current_round = model_round
+                    continue
+                    
+                # Error or round mismatch
+                print("Failed to get global model. Retrying in 5 seconds...")
+                time.sleep(5)
+                continue
+            
+            # Update local model with global parameters
+            self.client.update_parameters(global_params)
+            
+            # Perform local training
+            print(f"\n--- Client {self.client_id} training for round {current_round + 1} ---")
+            updated_params = self.client.train()
+            
+            # Submit update to server
+            result = self.submit_update(updated_params, current_round)
+            
+            if result is None:
+                print("Failed to submit update. Retrying in 5 seconds...")
+                time.sleep(5)
+                continue
+            
+            if 'status' in result and result['status'] == 'error':
+                if 'message' in result and 'round' in result['message']:
+                    # Server reported round mismatch - sync with server
+                    print(f"Error: {result['message']}")
+                    
+                    # Extract server round from error message if possible
+                    try:
+                        error_msg = result['message']
+                        if "server round" in error_msg:
+                            server_round_str = error_msg.split("server round")[1].strip()
+                            if server_round_str.startswith(str(current_round + 1)):
+                                print(f"Synchronizing with server: moving to round {current_round + 1}")
+                                current_round += 1
+                    except Exception:
+                        # If parsing fails, just check status again
+                        pass
+                        
+                    time.sleep(2)
+                    continue
+            
+            print(f"Update submitted successfully: {result.get('message', 'Unknown status')}")
+            
+            if result.get('round_completed', False):
+                # Round completed, move to next round
+                current_round += 1
+                print(f"Round {current_round} completed.")
+                
+                # Display metrics if provided
+                if 'metrics' in result:
+                    print(f"Loss: {result['metrics'].get('loss', 'N/A'):.4f}, "
+                          f"Accuracy: {result['metrics'].get('accuracy', 'N/A'):.2f}%")
+            else:
+                # Wait for other clients to complete the round
+                clients_received = result.get('clients_received', 0)
+                clients_needed = result.get('clients_needed', 1)
+                print(f"Waiting for other clients... {clients_received}/{clients_needed} clients received")
+                time.sleep(5)
+        
+        print("Training completed")
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Remote Federated Learning Client')
+    parser.add_argument('--client_id', type=int, required=True,
+                        help='Client ID')
+    parser.add_argument('--server_url', type=str, default='http://localhost:5000',
+                        help='Server URL')
+    parser.add_argument('--rounds', type=int, default=None,
+                        help='Number of training rounds')
+    return parser.parse_args()
 
 if __name__ == "__main__":
-    # Initialize the server
-    init_server()
+    args = parse_arguments()
     
-    # Start Flask application
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    try:
+        client = RemoteClient(args.client_id, args.server_url)
+        client.train(args.rounds)
+    except KeyboardInterrupt:
+        print("\nTraining interrupted by user")
+    except Exception as e:
+        print(f"Error: {str(e)}")
