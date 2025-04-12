@@ -101,12 +101,12 @@ To make your federated learning server accessible over the internet (for truly d
 
 5. Ngrok will display a forwarding URL (e.g., `https://abc123.ngrok-free.app`). Use this URL for your remote clients:
    ```
-   python SetupFL/Remote/remote_client.py --client_id 0 --server_url https://abc123.ngrok-free.app
+   python remote_client.py --client_id 0 --server_url "https://5af4-42-113-61-75.ngrok-free.app"
    ```
 
 6. For the dashboard, also use the ngrok URL:
    ```
-   python SetupFL/Remote/dashboard.py --server_url https://abc123.ngrok-free.app
+   python SetupFL/Remote/dashboard.py --server_url "https://5af4-42-113-61-75.ngrok-free.app"
    ```
 
 Note: The ngrok URL will change each time you restart ngrok unless you have a paid account with a fixed subdomain.
