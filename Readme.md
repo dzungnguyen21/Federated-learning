@@ -81,6 +81,36 @@ python SetupFL/Local/local_test.py --visualize
    ```
    Access the dashboard at http://localhost:8080
 
+#### Using Ngrok for Remote Connections
+
+To make your federated learning server accessible over the internet (for truly distributed training):
+
+1. Install ngrok from [https://ngrok.com/download](https://ngrok.com/download)
+
+2. Add ngrok to your system PATH or navigate to the directory containing the ngrok executable
+
+3. Start your federated learning server:
+   ```
+   python SetupFL/Remote/remote_test.py
+   ```
+
+4. In a separate terminal, start ngrok:
+   ```
+   ngrok http 5000
+   ```
+
+5. Ngrok will display a forwarding URL (e.g., `https://abc123.ngrok-free.app`). Use this URL for your remote clients:
+   ```
+   python SetupFL/Remote/remote_client.py --client_id 0 --server_url https://abc123.ngrok-free.app
+   ```
+
+6. For the dashboard, also use the ngrok URL:
+   ```
+   python SetupFL/Remote/dashboard.py --server_url https://abc123.ngrok-free.app
+   ```
+
+Note: The ngrok URL will change each time you restart ngrok unless you have a paid account with a fixed subdomain.
+
 ## Data Visualization
 
 Visualize dataset distribution:
