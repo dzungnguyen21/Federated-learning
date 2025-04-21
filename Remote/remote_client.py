@@ -21,8 +21,10 @@ def tensor_to_base64(tensor):
     """
     Convert a PyTorch tensor to base64 encoded string
     """
+    # Ensure tensor is on CPU before serialization
+    tensor_cpu = tensor.cpu()
     buffer = BytesIO()
-    torch.save(tensor, buffer)
+    torch.save(tensor_cpu, buffer)
     return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
 def base64_to_tensor(b64_string):
@@ -39,7 +41,9 @@ class RemoteClient:
         """
         self.client_id = client_id
         self.server_url = server_url
+        # Determine device - use GPU if available 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f"Client {client_id} using device: {self.device}")
         
         # Load configuration using Path class
         config_loader = Path()
@@ -98,7 +102,7 @@ class RemoteClient:
         Submit updated model parameters to server
         """
         try:
-            # Convert tensors to base64 strings
+            # Convert tensors to base64 strings - ensures they're on CPU
             param_data = [tensor_to_base64(param) for param in model_params]
             
             # Prepare payload

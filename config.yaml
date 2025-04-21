@@ -4,7 +4,7 @@
 data:
   dataset: 'mnist'  # Options: 'mnist', 'cifar10', 'brain'
   num_clients: 5
-  samples_per_client: 1000
+  samples_per_client: 5000
   iid: False    # Set to True for IID data, False for non-IID data
 
 # Model Configuration

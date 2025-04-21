@@ -1,96 +1,99 @@
 import torch
-import random
+import torch.nn as nn
+import numpy as np
 import sys
 import os
-from Components.load_config import Path
 
 # Add root directory to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Components.model import get_model, get_model_parameters, set_model_parameters
+from Components.load_config import Path
 
 class Server:
     def __init__(self, test_loader):
         """
-        Initialize server with global model
+        Initialize FL server with global model
         """
+        # Determine device - use GPU if available
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.global_model = get_model().to(self.device)
-        self.test_loader = test_loader
+        print(f"Server using device: {self.device}")
         
-        # Load configuration using Path class
+        # Load config
         config_loader = Path()
         self.config = config_loader.config
-            
-        self.clients_per_round = max(1, int(self.config['server']['fraction_clients'] * self.config['data']['num_clients']))
-        self.aggregation = self.config['server']['aggregation'].lower()
-    
-    def select_clients(self, client_list):
-        """
-        Select a fraction of clients randomly
-        """
-        return random.sample(client_list, self.clients_per_round)
-    
-    def aggregate_parameters(self, client_parameters, algorithm=None):
-        """
-        Aggregate model parameters from clients (FedAvg or FedProx)
-        """
-        # If algorithm is provided, use it; otherwise use config
-        if algorithm is None:
-            algorithm = self.aggregation
         
-        # FedAvg and FedProx use the same aggregation method
-        # The difference is in how clients optimize locally
+        # Initialize model
+        self.model = get_model()
         
-        # Get model shape from current global model
-        global_parameters = get_model_parameters(self.global_model)
+        # Set loss function
+        self.criterion = nn.CrossEntropyLoss()
         
-        # Initialize aggregated parameters with zeros
-        aggregated_parameters = []
-        for param in global_parameters:
-            aggregated_parameters.append(torch.zeros_like(param))
+        # Store test data loader
+        self.test_loader = test_loader
         
-        # Simple averaging of client parameters
-        num_clients = len(client_parameters)
-        for client_idx, params in enumerate(client_parameters):
-            for i, param in enumerate(params):
-                # Ensure parameters are on CPU for aggregation
-                if param.device != aggregated_parameters[i].device:
-                    param = param.to(aggregated_parameters[i].device)
-                aggregated_parameters[i] += param / num_clients
-        
-        # Update global model
-        set_model_parameters(self.global_model, aggregated_parameters)
-        
-        return get_model_parameters(self.global_model)
-    
-    def evaluate(self):
-        """
-        Evaluate global model on test dataset
-        """
-        self.global_model.eval()
-        criterion = torch.nn.CrossEntropyLoss()
-        test_loss = 0
-        correct = 0
-        total = 0
-        
-        with torch.no_grad():
-            for data, target in self.test_loader:
-                data, target = data.to(self.device), target.to(self.device)
-                
-                output = self.global_model(data)
-                test_loss += criterion(output, target).item()
-                
-                _, predicted = torch.max(output.data, 1)
-                total += target.size(0)
-                correct += (predicted == target).sum().item()
-        
-        test_loss /= len(self.test_loader)
-        accuracy = 100.0 * correct / total
-        
-        return test_loss, accuracy
+        # Store aggregated updates
+        self.updates_received = 0
     
     def get_global_parameters(self):
         """
         Get current global model parameters
         """
-        return get_model_parameters(self.global_model)
+        return get_model_parameters(self.model)
+    
+    def aggregate_parameters(self, client_parameters_list):
+        """
+        Aggregate client parameters using FedAvg
+        """
+        # Create a list of parameters
+        # Each element in client_parameters_list is a list of parameter tensors
+        
+        # Initialize with first client's parameters shape
+        num_parameters = len(client_parameters_list[0])
+        
+        # Calculate average of all client parameters
+        # First, sum all client parameters
+        aggregated_parameters = []
+        for i in range(num_parameters):
+            aggregated_parameters.append(
+                torch.stack([client_params[i] for client_params in client_parameters_list]).mean(dim=0)
+            )
+        
+        # Set the aggregated parameters to the global model
+        set_model_parameters(self.model, aggregated_parameters)
+        
+        # Increment number of updates received
+        self.updates_received += 1
+    
+    def evaluate(self):
+        """
+        Evaluate the global model on test data
+        """
+        self.model.eval()  # Set model to evaluation mode
+        test_loss = 0
+        correct = 0
+        total = 0
+        
+        # Disable gradient computation for efficiency
+        with torch.no_grad():
+            for data, target in self.test_loader:
+                # Move data to device
+                data, target = data.to(self.device), target.to(self.device)
+                
+                # Forward pass
+                output = self.model(data)
+                
+                # Sum up batch loss
+                test_loss += self.criterion(output, target).item()
+                
+                # Get the index of the max log-probability
+                pred = output.argmax(dim=1, keepdim=True)
+                
+                # Count correct predictions
+                total += target.size(0)
+                correct += pred.eq(target.view_as(pred)).sum().item()
+        
+        # Calculate average loss and accuracy
+        test_loss /= len(self.test_loader)
+        accuracy = 100. * correct / total
+        
+        return test_loss, accuracy
