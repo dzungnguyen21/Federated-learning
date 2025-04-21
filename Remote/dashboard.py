@@ -87,6 +87,22 @@ def dashboard():
                 gap: 20px;
             }
             
+            .progress-container {
+                width: 100%;
+                background-color: #ddd;
+                border-radius: 5px;
+                margin: 10px 0;
+            }
+            
+            .progress-bar {
+                height: 20px;
+                border-radius: 5px;
+                background-color: #4CAF50;
+                text-align: center;
+                color: white;
+                line-height: 20px;
+            }
+            
             @media (max-width: 768px) {
                 .grid-container {
                     grid-template-columns: 1fr;
@@ -102,7 +118,10 @@ def dashboard():
                 <h2>Server Status</h2>
                 <p>Status: <span id="server-status">Loading...</span></p>
                 <p>Current Round: <span id="current-round">-</span> / <span id="max-rounds">-</span></p>
-                <p>Clients this round: <span id="clients-count">-</span></p>
+                <p>Waiting for clients: <span id="clients-count">-</span> / <span id="total-clients">-</span></p>
+                <div class="progress-container">
+                    <div id="client-progress" class="progress-bar" style="width:0%">0%</div>
+                </div>
                 <p>Server URL: <span id="server-url"></span></p>
                 
                 <button id="reset-button" class="button button-red">Reset Server</button>
@@ -197,7 +216,15 @@ def dashboard():
                         $('#current-round').text(data.current_round);
                         $('#max-rounds').text(data.max_rounds);
                         $('#clients-count').text(data.clients_this_round);
+                        $('#total-clients').text(data.clients_needed);
                         $('#server-url').text(serverUrl);
+                        
+                        // Update progress bar
+                        if (data.clients_needed > 0) {
+                            const percentage = Math.round((data.clients_this_round / data.clients_needed) * 100);
+                            $('#client-progress').css('width', percentage + '%');
+                            $('#client-progress').text(percentage + '%');
+                        }
                         
                         // Update training metrics
                         updateMetrics();
@@ -286,7 +313,14 @@ def dashboard():
 def api_status():
     try:
         response = requests.get(f"{server_url}/status")
-        return response.json()
+        data = response.json()
+        return jsonify({
+            "status": data.get('status', 'Unknown'),
+            "current_round": data.get('current_round', 0),
+            "max_rounds": data.get('max_rounds', 0),
+            "clients_this_round": data.get('clients_this_round', 0),
+            "clients_needed": data.get('clients_needed', 0)
+        })
     except Exception as e:
         return jsonify({"error": str(e)})
 

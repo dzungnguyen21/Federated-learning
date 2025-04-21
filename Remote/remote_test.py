@@ -23,6 +23,7 @@ global_round = 0
 max_rounds = 0
 clients_this_round = {}
 round_completion = False
+expected_clients = 0  # Track the total number of expected clients
 
 @app.route('/favicon.ico')
 def favicon():
@@ -36,12 +37,15 @@ def init_server():
     """
     Initialize the federated learning server
     """
-    global global_server, max_rounds
+    global global_server, max_rounds, expected_clients
     
     # Load configuration
     config_loader = Path()
     config = config_loader.config
     max_rounds = config['training']['global_rounds']
+    
+    # Set the expected number of clients to the total number of clients
+    expected_clients = config['data']['num_clients']
     
     # Set random seed for reproducibility
     torch.manual_seed(42)
@@ -60,7 +64,7 @@ def init_server():
     global_server = Server(test_loader)
     
     print(f"Server initialized with {config['data']['dataset']} dataset and {config['model']['name']} model")
-    print(f"Server will run for {max_rounds} rounds")
+    print(f"Server will run for {max_rounds} rounds and wait for all {expected_clients} clients in each round")
 
 def tensor_to_base64(tensor):
     """
@@ -89,7 +93,7 @@ def status():
     """
     Get current server status
     """
-    global global_round, max_rounds, round_completion, clients_this_round
+    global global_round, max_rounds, round_completion, clients_this_round, expected_clients
     
     if global_server is None:
         return jsonify({
@@ -97,18 +101,13 @@ def status():
             'message': 'Server not initialized yet'
         })
     
-    # Get configuration for client count
-    config_loader = Path()
-    config = config_loader.config
-    clients_per_round = max(1, int(config['server']['fraction_clients'] * config['data']['num_clients']))
-    
     return jsonify({
         'status': 'Running',
         'current_round': global_round,
         'max_rounds': max_rounds,
         'round_completed': round_completion,
         'clients_this_round': len(clients_this_round),
-        'clients_needed': clients_per_round
+        'clients_needed': expected_clients
     })
 
 @app.route('/get_model', methods=['GET'])
@@ -149,7 +148,7 @@ def submit_update():
     """
     Submit updated model parameters from client
     """
-    global global_server, global_round, clients_this_round, round_completion
+    global global_server, global_round, clients_this_round, round_completion, expected_clients
     
     if global_server is None:
         return jsonify({
@@ -185,13 +184,8 @@ def submit_update():
         # Store client update
         clients_this_round[client_id] = model_params
         
-        # Check server configuration for number of clients per round
-        config_loader = Path()
-        config = config_loader.config
-        clients_per_round = max(1, int(config['server']['fraction_clients'] * config['data']['num_clients']))
-        
-        # If we have enough clients, aggregate and move to the next round
-        if len(clients_this_round) >= clients_per_round:
+        # Wait for all clients to submit their updates before aggregation
+        if len(clients_this_round) >= expected_clients:
             # Aggregate parameters
             global_server.aggregate_parameters(list(clients_this_round.values()))
             
@@ -217,10 +211,10 @@ def submit_update():
         else:
             return jsonify({
                 'status': 'success',
-                'message': 'Update received',
+                'message': 'Update received, waiting for all clients',
                 'round_completed': False,
                 'clients_received': len(clients_this_round),
-                'clients_needed': clients_per_round,
+                'clients_needed': expected_clients,
                 'round': global_round
             })
             

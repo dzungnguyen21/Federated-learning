@@ -2,9 +2,9 @@
 
 # Data Configuration
 data:
-  dataset: 'cifar10'  # Options: 'mnist', 'cifar10', 'brain'
+  dataset: 'mnist'  # Options: 'mnist', 'cifar10', 'brain'
   num_clients: 5
-  samples_per_client: 2000
+  samples_per_client: 1000
   iid: True    # Set to True for IID data, False for non-IID data
 
 # Model Configuration
@@ -32,5 +32,5 @@ client:
   criterion: 'crossentropy'
   # FedProx configuration
   fedprox:
-    enabled: True  # Set to True to enable FedProx
+    enabled: False  # Set to True to enable FedProx
     mu: 0.01  # Proximal term coefficient
