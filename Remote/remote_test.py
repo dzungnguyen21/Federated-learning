@@ -280,6 +280,34 @@ def get_metrics():
             'message': f'Error getting metrics: {str(e)}'
         }), 500
 
+@app.route('/detailed_metrics', methods=['GET'])
+def get_detailed_metrics():
+    """
+    Get detailed evaluation metrics including confusion matrix
+    """
+    global global_server
+    
+    if global_server is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'Server not initialized'
+        }), 500
+    
+    try:
+        # Get detailed metrics including confusion matrix, precision, recall, etc.
+        detailed_metrics = global_server.get_detailed_metrics()
+        
+        return jsonify({
+            'status': 'success',
+            'round': global_round,
+            'detailed_metrics': detailed_metrics
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error getting detailed metrics: {str(e)}'
+        }), 500
+
 if __name__ == "__main__":
     # Initialize the server
     init_server()

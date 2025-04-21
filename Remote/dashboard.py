@@ -46,7 +46,7 @@ def dashboard():
                 box-shadow: 0 0 10px rgba(0,0,0,0.1);
             }
             
-            h1, h2 {
+            h1, h2, h3 {
                 color: #333;
             }
             
@@ -103,6 +103,66 @@ def dashboard():
                 line-height: 20px;
             }
             
+            .metrics-panel {
+                background-color: #f9f9f9;
+                padding: 15px;
+                border-radius: 5px;
+                margin-top: 20px;
+            }
+            
+            .confusion-matrix {
+                margin-top: 15px;
+                overflow-x: auto;
+            }
+            
+            .confusion-matrix table {
+                border-collapse: collapse;
+                width: 100%;
+                max-width: 600px;
+                margin: 0 auto;
+            }
+            
+            .confusion-matrix th, .confusion-matrix td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: center;
+            }
+            
+            .confusion-matrix th {
+                background-color: #4CAF50;
+                color: white;
+            }
+            
+            .confusion-matrix td.diagonal {
+                background-color: rgba(75, 192, 192, 0.2);
+                font-weight: bold;
+            }
+            
+            .metrics-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 15px;
+            }
+            
+            .metrics-table th, .metrics-table td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: center;
+            }
+            
+            .metrics-table th {
+                background-color: #4CAF50;
+                color: white;
+            }
+            
+            .final-accuracy {
+                font-size: 24px;
+                font-weight: bold;
+                text-align: center;
+                margin: 15px 0;
+                color: #4CAF50;
+            }
+            
             @media (max-width: 768px) {
                 .grid-container {
                     grid-template-columns: 1fr;
@@ -126,6 +186,7 @@ def dashboard():
                 
                 <button id="reset-button" class="button button-red">Reset Server</button>
                 <button id="refresh-button" class="button">Refresh Status</button>
+                <button id="show-metrics-button" class="button">Show Detailed Metrics</button>
             </div>
             
             <div class="grid-container">
@@ -142,6 +203,39 @@ def dashboard():
                     </div>
                 </div>
             </div>
+            
+            <div class="metrics-panel" id="detailed-metrics" style="display: none;">
+                <h2>Detailed Model Metrics</h2>
+                
+                <div class="final-accuracy">
+                    Final Test Accuracy: <span id="final-accuracy">-</span>%
+                </div>
+                
+                <h3>Confusion Matrix</h3>
+                <div class="confusion-matrix" id="confusion-matrix">
+                    <p>Loading confusion matrix...</p>
+                </div>
+                
+                <h3>Classification Report</h3>
+                <div id="classification-report">
+                    <table class="metrics-table" id="metrics-table">
+                        <thead>
+                            <tr>
+                                <th>Class</th>
+                                <th>Precision</th>
+                                <th>Recall</th>
+                                <th>F1-score</th>
+                                <th>Support</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5">Loading metrics...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
         
         <script>
@@ -151,6 +245,7 @@ def dashboard():
             let accuracyData = [];
             let lossData = [];
             let serverUrl = 'http://localhost:5000';
+            let detailedMetricsVisible = false;
             
             // Initialize charts
             function initCharts() {
@@ -228,6 +323,11 @@ def dashboard():
                         
                         // Update training metrics
                         updateMetrics();
+                        
+                        // Check if training is complete to show final metrics
+                        if (data.current_round >= data.max_rounds) {
+                            updateDetailedMetrics();
+                        }
                     },
                     error: function() {
                         $('#server-status').text('Error connecting to server');
@@ -266,6 +366,113 @@ def dashboard():
                 });
             }
             
+            // Update detailed metrics
+            function updateDetailedMetrics() {
+                $.ajax({
+                    url: '/api/detailed_metrics',
+                    method: 'GET',
+                    success: function(data) {
+                        if (data.error || data.status === 'error') {
+                            console.error('Error getting detailed metrics:', data.error || data.message);
+                            return;
+                        }
+                        
+                        const metrics = data.detailed_metrics;
+                        
+                        // Update final accuracy
+                        $('#final-accuracy').text(metrics.accuracy.toFixed(2));
+                        
+                        // Generate confusion matrix
+                        generateConfusionMatrix(metrics.confusion_matrix);
+                        
+                        // Generate classification report
+                        generateClassificationReport(metrics);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('AJAX error:', status, error);
+                    }
+                });
+            }
+            
+            // Generate confusion matrix table
+            function generateConfusionMatrix(confusionMatrix) {
+                if (!confusionMatrix) {
+                    $('#confusion-matrix').html('<p>Confusion matrix not available</p>');
+                    return;
+                }
+                
+                const numClasses = confusionMatrix.length;
+                
+                // Create the table HTML
+                let tableHTML = '<table>';
+                
+                // Header row with predicted labels
+                tableHTML += '<tr><th></th><th colspan="' + numClasses + '">Predicted</th></tr>';
+                tableHTML += '<tr><th>Actual</th>';
+                for (let i = 0; i < numClasses; i++) {
+                    tableHTML += '<th>' + i + '</th>';
+                }
+                tableHTML += '</tr>';
+                
+                // Data rows
+                for (let i = 0; i < numClasses; i++) {
+                    tableHTML += '<tr>';
+                    tableHTML += '<th>' + i + '</th>';
+                    
+                    for (let j = 0; j < numClasses; j++) {
+                        // Highlight the diagonal elements (correct predictions)
+                        const className = (i === j) ? 'diagonal' : '';
+                        tableHTML += '<td class="' + className + '">' + confusionMatrix[i][j] + '</td>';
+                    }
+                    
+                    tableHTML += '</tr>';
+                }
+                
+                tableHTML += '</table>';
+                
+                $('#confusion-matrix').html(tableHTML);
+            }
+            
+            // Generate classification report table
+            function generateClassificationReport(metrics) {
+                if (!metrics.precision || !metrics.recall || !metrics.f1 || !metrics.support) {
+                    $('#classification-report').html('<p>Classification metrics not available</p>');
+                    return;
+                }
+                
+                const numClasses = metrics.precision.length;
+                
+                // Create table body
+                let tableBody = '';
+                
+                for (let i = 0; i < numClasses; i++) {
+                    tableBody += '<tr>';
+                    tableBody += '<td>' + i + '</td>';
+                    tableBody += '<td>' + metrics.precision[i].toFixed(4) + '</td>';
+                    tableBody += '<td>' + metrics.recall[i].toFixed(4) + '</td>';
+                    tableBody += '<td>' + metrics.f1[i].toFixed(4) + '</td>';
+                    tableBody += '<td>' + metrics.support[i] + '</td>';
+                    tableBody += '</tr>';
+                }
+                
+                // Insert the table body into the table
+                $('#metrics-table tbody').html(tableBody);
+            }
+            
+            // Toggle detailed metrics visibility
+            function toggleDetailedMetrics() {
+                detailedMetricsVisible = !detailedMetricsVisible;
+                
+                if (detailedMetricsVisible) {
+                    $('#detailed-metrics').show();
+                    $('#show-metrics-button').text('Hide Detailed Metrics');
+                    updateDetailedMetrics();
+                } else {
+                    $('#detailed-metrics').hide();
+                    $('#show-metrics-button').text('Show Detailed Metrics');
+                }
+            }
+            
             // Reset server
             function resetServer() {
                 if (confirm('Are you sure you want to reset the server? This will restart training from the beginning.')) {
@@ -302,6 +509,7 @@ def dashboard():
                 // Set up button handlers
                 $('#reset-button').click(resetServer);
                 $('#refresh-button').click(updateServerStatus);
+                $('#show-metrics-button').click(toggleDetailedMetrics);
             });
         </script>
     </body>
@@ -392,6 +600,23 @@ def api_set_url():
         return jsonify({"status": "success", "message": f"Server URL set to {server_url}"})
     else:
         return jsonify({"status": "error", "message": "No URL provided"})
+
+# API endpoint to get detailed metrics
+@app.route('/api/detailed_metrics')
+def api_detailed_metrics():
+    try:
+        response = requests.get(f"{server_url}/detailed_metrics")
+        data = response.json()
+        
+        if data['status'] == 'success':
+            return jsonify({
+                "status": "success",
+                "detailed_metrics": data['detailed_metrics']
+            })
+        else:
+            return jsonify({"status": "error", "message": data.get('message', 'Unknown error')})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Federated Learning Dashboard')

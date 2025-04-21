@@ -3,6 +3,8 @@ import torch.nn as nn
 import numpy as np
 import sys
 import os
+import sklearn.metrics as metrics
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support, accuracy_score
 
 # Add root directory to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -33,6 +35,16 @@ class Server:
         
         # Store aggregated updates
         self.updates_received = 0
+        
+        # Store detailed metrics
+        self.detailed_metrics = {
+            'confusion_matrix': None,
+            'precision': None,
+            'recall': None,
+            'f1': None,
+            'support': None,
+            'accuracy': 0.0
+        }
     
     def get_global_parameters(self):
         """
@@ -73,6 +85,10 @@ class Server:
         correct = 0
         total = 0
         
+        # Lists to store all true labels and predictions
+        all_targets = []
+        all_predictions = []
+        
         # Disable gradient computation for efficiency
         with torch.no_grad():
             for data, target in self.test_loader:
@@ -91,9 +107,46 @@ class Server:
                 # Count correct predictions
                 total += target.size(0)
                 correct += pred.eq(target.view_as(pred)).sum().item()
+                
+                # Store targets and predictions for later metrics calculation
+                all_targets.extend(target.cpu().numpy())
+                all_predictions.extend(pred.cpu().numpy().flatten())
         
         # Calculate average loss and accuracy
         test_loss /= len(self.test_loader)
         accuracy = 100. * correct / total
         
+        # Calculate detailed metrics
+        self.calculate_detailed_metrics(all_targets, all_predictions, accuracy)
+        
         return test_loss, accuracy
+    
+    def calculate_detailed_metrics(self, targets, predictions, accuracy):
+        """
+        Calculate confusion matrix, precision, recall, F1 score
+        """
+        num_classes = self.config['model']['num_classes']
+        
+        # Calculate confusion matrix
+        cm = confusion_matrix(targets, predictions, labels=range(num_classes))
+        
+        # Calculate precision, recall, F1 score, and support for each class
+        precision, recall, f1, support = precision_recall_fscore_support(
+            targets, predictions, labels=range(num_classes)
+        )
+        
+        # Store results
+        self.detailed_metrics = {
+            'confusion_matrix': cm.tolist(),
+            'precision': precision.tolist(),
+            'recall': recall.tolist(),
+            'f1': f1.tolist(),
+            'support': support.tolist(),
+            'accuracy': float(accuracy)
+        }
+    
+    def get_detailed_metrics(self):
+        """
+        Return detailed evaluation metrics
+        """
+        return self.detailed_metrics
