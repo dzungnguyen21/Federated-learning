@@ -42,8 +42,8 @@ Data/MNIST/raw/train-images-idx3-ubyte
 Data/MNIST/raw/train-labels-idx1-ubyte
 Data/MNIST/raw/t10k-images-idx3-ubyte
 Data/MNIST/raw/t10k-labels-idx1-ubyte
-Data/Training/
-Data/Testing/
+Data/Brain/Training/
+Data/Brain/Testing/
 
 *.tar.gz
 *.gz

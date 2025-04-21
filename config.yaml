@@ -2,23 +2,23 @@
 
 # Data Configuration
 data:
-  dataset: 'mnist'  # Options: 'mnist', 'cifar10'
+  dataset: 'mnist'  # Options: 'mnist', 'cifar10', 'brain'
   num_clients: 5
   samples_per_client: 1000
-  iid: True    # Set to True for IID data, False for non-IID data
+  iid: False    # Set to True for IID data, False for non-IID data
 
 # Model Configuration
 model:
-  name: 'cnn'  # Options: 'cnn [1,28,28]', 'cifar_cnn[3,32,32]'
-  input_shape: [3, 32, 32]  # [channels, height, width]
-  num_classes: 10
+  name: 'cnn'  # Options: 'cnn [1,28,28]', 'cifar_cnn[3,32,32]', 'brain_cnn'
+  input_shape: [1, 28, 28]  # [channels, height, width]
+  num_classes: 10  # Update this to match the number of classes in your brain data
 
 # Training Configuration
 training:
   global_rounds: 10
   local_epochs: 5
-  batch_size: 64
-  learning_rate: 0.01
+  batch_size: 64  # Reduced batch size for larger images
+  learning_rate: 0.001  # Lower learning rate for transfer learning
   momentum: 0.9
 
 # Server Configuration
@@ -32,5 +32,5 @@ client:
   criterion: 'crossentropy'
   # FedProx configuration
   fedprox:
-    enabled: False  # Set to True to enable FedProx
+    enabled: True  # Set to True to enable FedProx
     mu: 0.01  # Proximal term coefficient
