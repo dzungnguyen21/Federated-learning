@@ -9,7 +9,7 @@ from collections import Counter
 # Add root directory to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.data_loader import load_dataset
-from Data.data_split import create_client_data, load_config
+from Data.data_split import create_client_data
 from Components.load_config import Path
 
 config_loader = Path()
@@ -118,8 +118,6 @@ def visualize_data():
     """
     Main function to visualize data
     """
-    # Load configuration
-    config = load_config()
     
     # Set random seed for reproducibility
     np.random.seed(42)
