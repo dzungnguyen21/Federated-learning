@@ -59,7 +59,7 @@ Edit `config.yaml` to customize:
 Run local federated learning simulation:
 
 ```
-python SetupFL/Local/local_test.py --visualize
+python Local/local_test.py --visualize
 ```
 
 ### Remote Training
@@ -116,7 +116,7 @@ Note: The ngrok URL will change each time you restart ngrok unless you have a pa
 Visualize dataset distribution:
 
 ```
-python SetupFL/Data/visualize_data.py
+python Data/visualize_data.py
 ```
 
 ## Models
